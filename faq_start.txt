@@ -1,0 +1,1 @@
+& C:/Users/E.Shmerko/.virtualenvs/Web2pdf-dOyEmg0b/Scripts/python.exe d:/Python/graduirovki/main.py d:/Python/graduirovki/53.rtf
