@@ -4,6 +4,8 @@ import os
 import time
 import tempfile
 import pythoncom
+import requests
+import json
 from PySide6.QtWidgets import (
     QApplication,
     QMainWindow,
@@ -16,7 +18,8 @@ from PySide6.QtWidgets import (
     QPushButton,
     QTextEdit,
     QStatusBar,
-    QMessageBox
+    QMessageBox,
+    QDialog
 )
 from PySide6.QtGui import (
     QFont,
@@ -26,21 +29,38 @@ from PySide6.QtGui import (
     QBrush,
     QIcon,
     QPainter,
-    QPaintEvent
+    QPaintEvent,
+    QDesktopServices
 )
 from PySide6.QtCore import (
     Qt,
     QPropertyAnimation,
     QEasingCurve,
-    QSize
+    QSize,
+    QTimer,
+    QUrl
 )
 from striprtf.striprtf import rtf_to_text
 import win32com.client as win32
 
-
-class DeveloperWidget(QWidget):
+class AboutDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.current_version = parent.current_version if parent else "0.0.1"
+        self.setWindowTitle(f"О программе (версия {self.current_version})")
+        self.setup_ui()
+        self.setMinimumSize(400, 300)
+
+    def setup_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        developer_widget = DeveloperWidget(self.current_version)
+        layout.addWidget(developer_widget)
+
+class DeveloperWidget(QWidget):
+    def __init__(self, version, parent=None):
+        super().__init__(parent)
+        self.current_version = version
         self.setup_ui()
         self.setup_animations()
 
@@ -50,24 +70,9 @@ class DeveloperWidget(QWidget):
         main_layout.setContentsMargins(20, 10, 20, 10)
         main_layout.setSpacing(15)
 
-        # Иконка (замените путь на свой)
-        # pixmap = QPixmap("dev.png").scaled(64, 64, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-        # self.icon_label = QLabel()
-        # self.icon_label.setPixmap(pixmap)
-        # self.icon_label.setText("")  # Удалить эмодзи
-        
-        # Временная иконка с эмодзи
         self.icon_label = QLabel()
-        # self.icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        # self.icon_label.setStyleSheet("""
-        #     background-color: #4CAF50;
-        #     border-radius: 32px;
-        #     font-size: 24px;
-        #     color: white;
-        # """)
-        # self.icon_label.setText("")
 
-        # Текстовая информация
+
         text_layout = QVBoxLayout()
         text_layout.setSpacing(2)
         
@@ -77,11 +82,10 @@ class DeveloperWidget(QWidget):
         self.org_label = QLabel("ОАО «Пуховичинефтепродукт»")
         self.email_label = QLabel("Email: e.shmerko@beloil.by")
         self.phone_label = QLabel("Тел.: +375 44 7777710")
-        self.year_label = QLabel("ver. 0.0.1")
+        self.year_label = QLabel(f"ver. {self.current_version}")
 
-        # Настройка шрифтов
         name_font = QFont("Segoe UI Semibold", 8)
-        details_font = QFont("Segoe UI", 6)
+        details_font = QFont("Segoe UI", 8)
         
         self.razrab_label.setFont(name_font)
         self.dol_label.setFont(details_font)
@@ -91,7 +95,6 @@ class DeveloperWidget(QWidget):
         self.phone_label.setFont(details_font)
         self.year_label.setFont(details_font)
 
-        # Цвета
         primary_color = QColor("#2c3e50")
         self.razrab_label.setStyleSheet(f"color: {primary_color.name()};")
         self.dol_label.setStyleSheet(f"color: {primary_color.name()}; opacity: 0.9;")
@@ -101,7 +104,6 @@ class DeveloperWidget(QWidget):
         self.phone_label.setStyleSheet(f"color: {primary_color.name()}; opacity: 0.8;")
         self.year_label.setStyleSheet(f"color: {primary_color.name()}; opacity: 0.7;")
 
-        # Выравнивание
         for label in [self.razrab_label, self.dol_label, self.name_label, self.org_label, 
                      self.email_label, self.phone_label, self.year_label]:
             label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -114,7 +116,6 @@ class DeveloperWidget(QWidget):
         text_layout.addWidget(self.phone_label)
         text_layout.addWidget(self.year_label)
 
-        # Центрируем всю группу
         container = QWidget()
         container_layout = QHBoxLayout(container)
         container_layout.addStretch()
@@ -126,7 +127,6 @@ class DeveloperWidget(QWidget):
 
         main_layout.addWidget(container)
 
-        # Стилизация
         self.setStyleSheet("""
             QWidget#DeveloperWidget {
                 background: qlineargradient(
@@ -161,36 +161,22 @@ class DeveloperWidget(QWidget):
         self.animation.start()
         super().leaveEvent(event)
 
-    def setup_animations(self):
-        self.animation = QPropertyAnimation(self, b"windowOpacity")
-        self.animation.setDuration(300)
-
-    def enterEvent(self, event):
-        self.animation.stop()
-        self.animation.setStartValue(1.0)
-        self.animation.setEndValue(0.95)
-        self.animation.setEasingCurve(QEasingCurve.OutQuad)
-        self.animation.start()
-        super().enterEvent(event)
-
-    def leaveEvent(self, event):
-        self.animation.stop()
-        self.animation.setStartValue(0.95)
-        self.animation.setEndValue(1.0)
-        self.animation.setEasingCurve(QEasingCurve.OutQuad)
-        self.animation.start()
-        super().leaveEvent(event)
-
-
 class FileConverterApp(QMainWindow):
     def __init__(self):
         super().__init__()
+        self.current_version = "0.0.1"
+        self.update_check_url = "https://eshmerko.com/versions.json"
+        self.base_download_url = "https://eshmerko.com/"
+        
         self.setWindowTitle("Извлечение данных из таблиц")
         self.setGeometry(100, 100, 800, 600)
-        # Инициализируем статусную панель
         self.statusBar().showMessage("Готово")
         self.setup_ui()
         self.setup_connections()
+
+    def show_about_dialog(self):
+        dialog = AboutDialog(self)  # self здесь - экземпляр FileConverterApp
+        dialog.exec()
 
     def setup_ui(self):
         central_widget = QWidget()
@@ -199,12 +185,55 @@ class FileConverterApp(QMainWindow):
         main_layout.setContentsMargins(10, 10, 10, 10)
         main_layout.setSpacing(15)
 
-        # Секция выбора файлов
+        # Header layout
+        header_layout = QHBoxLayout()
+        header_layout.setContentsMargins(0, 0, 0, 15)
+        
+        right_container = QHBoxLayout()
+        right_container.setSpacing(15)
+        
+        self.update_label = QLabel()
+        self.update_label.setStyleSheet("""
+            color: #28a745; 
+            font-size: 11pt;
+            qproperty-alignment: AlignRight;
+        """)
+        self.update_label.setOpenExternalLinks(False)
+        self.update_label.linkActivated.connect(self.open_update_url)
+        
+        self.about_btn = QPushButton("О программе")
+        self.about_btn.setStyleSheet("""
+            QPushButton {
+                padding: 5px 12px;
+                font-weight: 500;
+                background-color: #f8f9fa;
+                color: #212529;
+                border-radius: 4px;
+                font-size: 11pt;
+                border: 1px solid #dee2e6;
+            }
+            QPushButton:hover {
+                background-color: #e9ecef;
+                border-color: #ced4da;
+            }
+            QPushButton:pressed {
+                background-color: #dee2e6;
+            }
+        """)
+        self.about_btn.setFixedSize(120, 30)
+        
+        right_container.addWidget(self.update_label)
+        right_container.addWidget(self.about_btn)
+        
+        header_layout.addStretch()
+        header_layout.addLayout(right_container)
+
+        # File selection
         file_selection_layout = QVBoxLayout()
         file_selection_layout.addLayout(self.create_input_layout())
         file_selection_layout.addLayout(self.create_output_layout())
 
-        # Лог-панель
+        # Log area
         self.log_area = QTextEdit()
         self.log_area.setReadOnly(True)
         self.log_area.setStyleSheet("""
@@ -219,18 +248,33 @@ class FileConverterApp(QMainWindow):
             }
         """)
 
-        # Кнопка конвертации
+        # Convert button
         self.convert_btn = QPushButton("Конвертировать файл")
-        self.convert_btn.setStyleSheet(self.get_button_style())
+        self.convert_btn.setStyleSheet("""
+            QPushButton {
+                padding: 12px 24px;
+                font-weight: 600;
+                background-color: #4CAF50;
+                color: white;
+                border-radius: 6px;
+                font-size: 12pt;
+                margin: 10px 0;
+                border: none;
+            }
+            QPushButton:hover {
+                background-color: #45a049;
+            }
+            QPushButton:pressed {
+                background-color: #3d8b40;
+            }
+        """)
 
-        # Блок разработчика
-        developer_widget = DeveloperWidget()
-
-        # Компоновка элементов
+        main_layout.addLayout(header_layout)
         main_layout.addLayout(file_selection_layout)
         main_layout.addWidget(self.log_area, 1)
         main_layout.addWidget(self.convert_btn)
-        main_layout.addWidget(developer_widget)
+
+        QTimer.singleShot(1000, self.check_for_updates)
 
     def create_input_layout(self):
         layout = QHBoxLayout()
@@ -257,30 +301,15 @@ class FileConverterApp(QMainWindow):
         layout.addWidget(self.browse_output_btn)
         return layout
 
-    def get_button_style(self):
-        return """
-            QPushButton {
-                padding: 12px 24px;
-                font-weight: 600;
-                background-color: #4CAF50;
-                color: white;
-                border-radius: 6px;
-                font-size: 12pt;
-                margin: 10px 0;
-                border: none;
-            }
-            QPushButton:hover {
-                background-color: #45a049;
-            }
-            QPushButton:pressed {
-                background-color: #3d8b40;
-            }
-        """
-
     def setup_connections(self):
         self.browse_input_btn.clicked.connect(self.select_input_file)
         self.browse_output_btn.clicked.connect(self.select_output_file)
         self.convert_btn.clicked.connect(self.process_file)
+        self.about_btn.clicked.connect(self.show_about_dialog)
+
+    def show_about_dialog(self):
+        dialog = AboutDialog(self)
+        dialog.exec()
 
     def select_input_file(self):
         file_filter = "Поддерживаемые файлы (*.docx *.doc *.rtf);;Все файлы (*)"
@@ -306,9 +335,74 @@ class FileConverterApp(QMainWindow):
     def log_message(self, message, status=False):
         self.log_area.append(message)
         if status:
-            # Используем встроенный метод statusBar()
             self.statusBar().showMessage(message, 5000)
         QApplication.processEvents()
+
+    def check_for_updates(self):
+        try:
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'application/json',
+                'Cache-Control': 'no-cache'
+            }
+
+            response = requests.get(
+                self.update_check_url,
+                timeout=15,
+                verify=False,
+                headers=headers,
+                allow_redirects=True
+            )
+
+            self.log_message(f"HTTP Status: {response.status_code}", status=True)
+            
+            if response.status_code == 200:
+                try:
+                    data = json.loads(response.text)
+                    # self.log_message(f"Полученные данные: {data}")
+                    
+                    latest_version = data.get('latest_version')
+                    filename = data.get('filename')
+                    
+                    if not latest_version or not filename:
+                        self.log_message("Ошибка: Неверный формат файла обновлений")
+                        return
+                    
+                    self.log_message(f"Текущая версия: {self.current_version}, Последняя версия: {latest_version}")
+                    
+                    if self.version_to_tuple(latest_version) > self.version_to_tuple(self.current_version):
+                        self.log_message("Обнаружена новая версия!", status=True)
+                        self.show_update_notification(filename)
+                    else:
+                        self.log_message("Обновлений не найдено")
+                        self.update_label.clear()
+                        
+                except json.JSONDecodeError:
+                    self.log_message("Ошибка: Некорректный JSON-формат в ответе сервера", status=True)
+            
+            elif response.status_code == 403:
+                error_msg = "Доступ запрещен. Возможные причины:\n1. Ошибка конфигурации сервера\n2. Блокировка по географическому признаку\n3. Требуется авторизация"
+                self.log_message(error_msg, status=True)
+            else:
+                self.log_message(f"Ошибка сервера: {response.status_code}", status=True)
+                
+        except requests.exceptions.RequestException as e:
+            self.log_message(f"Ошибка подключения: {str(e)}", status=True)
+            
+        except Exception as e:
+            self.log_message(f"Неизвестная ошибка: {str(e)}", status=True)
+
+    def version_to_tuple(self, version_str):
+        return tuple(map(int, version_str.split('.')))
+
+    def show_update_notification(self, filename):
+        download_url = f"{self.base_download_url}{filename}"
+        link_text = f'<a href="{download_url}" style="text-decoration:none; color:#28a745;">\
+                     Доступно обновление: {filename}</a>'
+        self.update_label.setText(link_text)
+
+    def open_update_url(self, link):
+        QDesktopServices.openUrl(QUrl(link))
 
     def convert_to_rtf(self, input_path):
         try:
@@ -463,7 +557,6 @@ class FileConverterApp(QMainWindow):
             error_msg = f"Критическая ошибка: {str(e)}"
             self.log_message(error_msg, status=True)
             QMessageBox.critical(self, "Ошибка", error_msg)
-
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
