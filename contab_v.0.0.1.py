@@ -2,54 +2,28 @@
 # SPDX-License-Identifier: MIT
 
 import sys
-import re
 import os
+import re
 import time
 import tempfile
 import pythoncom
 import requests
 import json
-from PySide6.QtWidgets import (
-    QApplication,
-    QMainWindow,
-    QWidget,
-    QVBoxLayout,
-    QHBoxLayout,
-    QFileDialog,
-    QLabel,
-    QLineEdit,
-    QPushButton,
-    QTextEdit,
-    QStatusBar,
-    QMessageBox,
-    QDialog
+from PySide6.QtCore import (
+    Qt, QPropertyAnimation, QEasingCurve, QThread, Signal, QUrl, QSettings, QTimer
 )
 from PySide6.QtGui import (
-    QFont,
-    QPixmap,
-    QColor,
-    QLinearGradient,
-    QBrush,
-    QIcon,
-    QPainter,
-    QPaintEvent,
-    QDesktopServices
+    QFont, QPixmap, QColor, QLinearGradient, QBrush, QIcon, QPainter, QAction, QDesktopServices
 )
-from PySide6.QtCore import (
-    Qt,
-    QPropertyAnimation,
-    QEasingCurve,
-    QSize,
-    QTimer,
-    QUrl
+from PySide6.QtWidgets import (
+    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
+    QFileDialog, QLabel, QLineEdit, QPushButton, QTextEdit, QStatusBar,
+    QMessageBox, QDialog, QScrollArea, QScrollBar
 )
 from striprtf.striprtf import rtf_to_text
 import win32com.client as win32
 
 from config import AppConfig
-from PySide6.QtCore import QThread, Signal, Qt, QPropertyAnimation, QEasingCurve
-from PySide6.QtWidgets import QWidget, QLabel, QVBoxLayout, QHBoxLayout
-from PySide6.QtGui import QFont, QPixmap
 
 class AboutDialog(QDialog):
     def __init__(self, parent=None):
@@ -64,6 +38,8 @@ class AboutDialog(QDialog):
         developer_widget = DeveloperWidget()
         layout.addWidget(developer_widget)
 
+
+# Загрузчик изображений
 class ImageLoader(QThread):
     image_loaded = Signal(QPixmap)
     load_failed = Signal()
@@ -73,7 +49,9 @@ class ImageLoader(QThread):
             response = requests.get(
                 "https://eshmerko.com/developer_photo.jpg",
                 timeout=10,
-                headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36'},
+                headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'application/json',
+                'Cache-Control': 'no-cache'},
                 verify=False
             )
             if response.status_code == 200:
@@ -85,6 +63,7 @@ class ImageLoader(QThread):
         except Exception:
             self.load_failed.emit()
 
+# Виджет разработчика
 class DeveloperWidget(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -120,22 +99,20 @@ class DeveloperWidget(QWidget):
         info_layout = QVBoxLayout()
         info_layout.setSpacing(10)
 
-        # Имя
+        # Имя и должность
         self.name_label = QLabel(AppConfig.DEVELOPER_NAME)
         self.name_label.setFont(QFont("Segoe UI Semibold", 16, QFont.Weight.Bold))
-        self.name_label.setStyleSheet("color: #2c3e50; margin-bottom: 5px;")
+        self.name_label.setStyleSheet("color: #E4E4E4; margin-bottom: 5px;")
 
-        # Должность
         self.position_label = QLabel("Инженер-технолог")
         self.position_label.setFont(QFont("Segoe UI", 14))
-        self.position_label.setStyleSheet("color: #4a4a4a; margin-bottom: 8px;")
-
-        # Компания
-        self.company_label = QLabel(AppConfig.COMPANY_NAME)
-        self.company_label.setFont(QFont("Segoe UI", 12))
-        self.company_label.setStyleSheet("color: #6c757d; margin-bottom: 15px;")
+        self.position_label.setStyleSheet("color: #E4E4E4; margin-bottom: 8px;")
 
         # Контакты
+        self.company_label = QLabel(AppConfig.COMPANY_NAME)
+        self.company_label.setFont(QFont("Segoe UI", 12))
+        self.company_label.setStyleSheet("color: #E4E4E4; margin-bottom: 15px;")
+
         contacts_layout = QVBoxLayout()
         contacts_layout.setSpacing(8)
 
@@ -143,14 +120,11 @@ class DeveloperWidget(QWidget):
         email_widget = QWidget()
         email_layout = QHBoxLayout(email_widget)
         email_layout.setContentsMargins(0, 0, 0, 0)
-        
         email_icon = QLabel("📧")
         email_icon.setFont(QFont("Segoe UI", 14))
-        
         email_text = QLabel(AppConfig.DEVELOPER_EMAIL)
         email_text.setFont(QFont("Segoe UI", 12))
-        email_text.setStyleSheet("color: #2c3e50;")
-        
+        email_text.setStyleSheet("color: #E4E4E4;")
         email_layout.addWidget(email_icon)
         email_layout.addWidget(email_text)
         email_layout.addStretch()
@@ -159,14 +133,11 @@ class DeveloperWidget(QWidget):
         phone_widget = QWidget()
         phone_layout = QHBoxLayout(phone_widget)
         phone_layout.setContentsMargins(0, 0, 0, 0)
-        
         phone_icon = QLabel("📱")
         phone_icon.setFont(QFont("Segoe UI", 14))
-        
         phone_text = QLabel(AppConfig.DEVELOPER_PHONE)
         phone_text.setFont(QFont("Segoe UI", 12))
-        phone_text.setStyleSheet("color: #2c3e50;")
-        
+        phone_text.setStyleSheet("color: #E4E4E4;")
         phone_layout.addWidget(phone_icon)
         phone_layout.addWidget(phone_text)
         phone_layout.addStretch()
@@ -202,7 +173,6 @@ class DeveloperWidget(QWidget):
         main_layout.addWidget(self.photo_label)
         main_layout.addLayout(info_layout)
 
-        # Стиль виджета
         self.setStyleSheet("""
             QWidget#DeveloperWidget {
                 background: qlineargradient(
@@ -269,14 +239,126 @@ class DeveloperWidget(QWidget):
         self.animation.start()
         super().leaveEvent(event)
 
+# Стартовый экран с инструкцией
+class StartupScreen(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setup_ui()
+        
+    def setup_ui(self):
+        self.setWindowTitle("Добро пожаловать")
+        self.setFixedSize(680, 500)
+        
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(30, 20, 30, 20)
+        
+        # Заголовок
+        title = QLabel("Инструкция и условия использования")
+        title.setFont(QFont("Segoe UI Semibold", 16))
+        title.setStyleSheet("color: #2c3e50; margin-bottom: 15px;")
+        
+        # Текст с прокруткой
+        scroll_area = QScrollArea()
+        content = QLabel()
+        content.setWordWrap(True)
+        content.setTextFormat(Qt.TextFormat.RichText)
+        content.setText(self.get_content_text())
+        content.setStyleSheet("font-size: 12pt; color: #4a4a4a; padding: 10px;")
+        
+        scroll_area.setWidget(content)
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
+        
+        # Кнопка принятия
+        accept_btn = QPushButton("Принять и продолжить")
+        accept_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #4CAF50;
+                color: white;
+                padding: 12px 24px;
+                border-radius: 6px;
+                font-size: 12pt;
+                margin-top: 20px;
+            }
+            QPushButton:hover {
+                background-color: #45a049;
+            }
+        """)
+        accept_btn.clicked.connect(self.accept)
+        
+        layout.addWidget(title)
+        layout.addWidget(scroll_area)
+        layout.addWidget(accept_btn, 0, Qt.AlignmentFlag.AlignCenter)
+        
+        self.setStyleSheet("""
+            QDialog {
+                background: #ffffff;
+                border-radius: 12px;
+            }
+            QScrollArea {
+                border: none;
+            }
+            QScrollBar:vertical {
+                width: 12px;
+                background: #f0f0f0;
+                border-radius: 6px;
+            }
+            QScrollBar::handle:vertical {
+                background: #c0c0c0;
+                min-height: 30px;
+                border-radius: 6px;
+            }
+        """)
+    
+    def get_content_text(self):
+        return f"""
+        <h3>📋 Поддерживаемые форматы файлов:</h3>
+        <ul>
+            <li>Microsoft Word (.docx)</li>
+            <li>Microsoft Word 97-2003 (.doc)</li>
+            <li>Rich Text Format (.rtf)</li>
+        </ul>
+        
+        <h3>🛠️ Инструкция по использованию:</h3>
+        <ol>
+            <li>Нажмите кнопку <b>'Выбрать...'</b> в разделе <i>'Исходный файл'</i></li>
+            <li>Выберите документ для обработки</li>
+            <li>Укажите имя результирующего файла (по умолчанию: результат.txt)</li>
+            <li>Нажмите кнопку <b>'Конвертировать файл'</b></li>
+            <li>Ожидайте завершения процесса в лог-панели</li>
+        </ol>
+        
+        <h3>⚠️ Отказ от ответственности:</h3>
+        <p>Программа {AppConfig.APP_NAME} версии {AppConfig.VERSION} предоставляется <b>'как есть'</b>, 
+        без каких-либо гарантий. Разработчик ({AppConfig.DEVELOPER_NAME}) не несет ответственности за:</p>
+        <ul>
+            <li>Прямой или косвенный ущерб, вызванный использованием программы</li>
+            <li>Потерю данных или их некорректную обработку</li>
+            <li>Проблемы совместимости с конкретными версиями ПО</li>
+            <li>Последствия использования нелицензионного программного обеспечения</li>
+        </ul>
+        <p>Используя данное программное обеспечение, вы соглашаетесь с этими условиями.</p>
+        """
+
+# Основной класс приложения
 class FileConverterApp(QMainWindow):
     def __init__(self):
         super().__init__()
+        self.current_version = AppConfig.VERSION
+        self.update_check_url = AppConfig.UPDATE_CHECK_URL
+        self.base_download_url = AppConfig.BASE_DOWNLOAD_URL
+        
         self.setWindowTitle(AppConfig.APP_NAME)
         self.setGeometry(100, 100, 800, 600)
         self.statusBar().showMessage("Готово")
+        
         self.setup_ui()
         self.setup_connections()
+        self.setup_menu()
+        
+        # Показ стартового экрана
+        if not QSettings().value("agreement_accepted", False):
+            self.show_startup_screen()
 
     def setup_ui(self):
         central_widget = QWidget()
@@ -340,7 +422,7 @@ class FileConverterApp(QMainWindow):
             QTextEdit {
                 font-family: 'Segoe UI';
                 font-size: 11pt;
-                background-color: #ffffff;
+                background-color: #B8B8B8;
                 border: 1px solid #dee2e6;
                 border-radius: 4px;
                 padding: 8px;
@@ -401,11 +483,28 @@ class FileConverterApp(QMainWindow):
         layout.addWidget(self.browse_output_btn)
         return layout
 
+    def setup_menu(self):
+        menu_bar = self.menuBar()
+        help_menu = menu_bar.addMenu("Справка")
+        
+        show_manual_action = QAction("Показать инструкцию", self)
+        show_manual_action.triggered.connect(self.show_startup_screen)
+        help_menu.addAction(show_manual_action)
+        
+        about_action = QAction("О программе", self)
+        about_action.triggered.connect(self.show_about_dialog)
+        help_menu.addAction(about_action)
+
     def setup_connections(self):
         self.browse_input_btn.clicked.connect(self.select_input_file)
         self.browse_output_btn.clicked.connect(self.select_output_file)
         self.convert_btn.clicked.connect(self.process_file)
         self.about_btn.clicked.connect(self.show_about_dialog)
+
+    def show_startup_screen(self):
+        startup_dialog = StartupScreen(self)
+        if startup_dialog.exec() == QDialog.Accepted:
+            QSettings().setValue("agreement_accepted", True)
 
     def show_about_dialog(self):
         dialog = AboutDialog(self)
@@ -649,8 +748,6 @@ class FileConverterApp(QMainWindow):
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     app.setStyle("Fusion")
-    app.setWindowIcon(QIcon(":/icons/app_icon.png"))
-    
     window = FileConverterApp()
     window.show()
     sys.exit(app.exec())
