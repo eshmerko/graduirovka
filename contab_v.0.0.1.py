@@ -51,6 +51,96 @@ from PySide6.QtCore import QThread, Signal, Qt, QPropertyAnimation, QEasingCurve
 from PySide6.QtWidgets import QWidget, QLabel, QVBoxLayout, QHBoxLayout
 from PySide6.QtGui import QFont, QPixmap
 
+class StartupScreen(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setup_ui()
+        
+    def setup_ui(self):
+        self.setWindowTitle("Добро пожаловать")
+        self.setFixedSize(600, 400)
+        
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(30, 20, 30, 20)
+        
+        # Заголовок
+        title = QLabel("Инструкция и условия использования")
+        title.setFont(QFont("Segoe UI Semibold", 16))
+        title.setStyleSheet("color: #2c3e50; margin-bottom: 15px;")
+        
+        # Текст с прокруткой
+        scroll_area = QScrollArea()
+        content = QLabel()
+        content.setWordWrap(True)
+        content.setTextFormat(Qt.TextFormat.RichText)
+        content.setText(self.get_content_text())
+        content.setStyleSheet("font-size: 12pt; color: #4a4a4a;")
+        
+        scroll_area.setWidget(content)
+        scroll_area.setWidgetResizable(True)
+        
+        # Кнопка принятия
+        accept_btn = QPushButton("Принять и продолжить")
+        accept_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #4CAF50;
+                color: white;
+                padding: 12px 24px;
+                border-radius: 6px;
+                font-size: 12pt;
+            }
+            QPushButton:hover {
+                background-color: #45a049;
+            }
+        """)
+        accept_btn.clicked.connect(self.accept)
+        
+        layout.addWidget(title)
+        layout.addWidget(scroll_area)
+        layout.addWidget(accept_btn, 0, Qt.AlignmentFlag.AlignCenter)
+        
+        self.setStyleSheet("""
+            QDialog {
+                background: #ffffff;
+                border-radius: 12px;
+            }
+            QScrollArea {
+                border: none;
+            }
+        """)
+    def accept(self):
+        QSettings().setValue("agreement_accepted", True)
+        super().accept()
+
+    def get_content_text(self):
+        return """
+        <h3>📋 Поддерживаемые форматы файлов:</h3>
+        <ul>
+            <li>Microsoft Word (.docx)</li>
+            <li>Microsoft Word 97-2003 (.doc)</li>
+            <li>Rich Text Format (.rtf)</li>
+        </ul>
+        
+        <h3>🛠️ Инструкция по использованию:</h3>
+        <ol>
+            <li>Нажмите кнопку <b>'Выбрать...'</b> в разделе <i>'Исходный файл'</i></li>
+            <li>Выберите документ для обработки</li>
+            <li>Укажите имя результирующего файла (по умолчанию: результат.txt)</li>
+            <li>Нажмите кнопку <b>'Конвертировать файл'</b></li>
+            <li>Ожидайте завершения процесса в лог-панели</li>
+        </ol>
+        
+        <h3>⚠️ Отказ от ответственности:</h3>
+        <p>Данная программа предоставляется <b>'как есть'</b>, без каких-либо гарантий. 
+        Разработчик не несет ответственности за:</p>
+        <ul>
+            <li>Прямой или косвенный ущерб, вызванный использованием программы</li>
+            <li>Потерю данных или их некорректную обработку</li>
+            <li>Проблемы совместимости с конкретными версиями ПО</li>
+        </ul>
+        <p>Используя данное программное обеспечение, вы соглашаетесь с этими условиями.</p>
+        """
+
 class AboutDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -277,6 +367,24 @@ class FileConverterApp(QMainWindow):
         self.statusBar().showMessage("Готово")
         self.setup_ui()
         self.setup_connections()
+        # Показываем стартовый экран
+        self.show_startup_screen()
+        help_menu = self.menuBar().addMenu("Справка")
+        show_manual_action = QAction("Показать инструкцию", self)
+        show_manual_action.triggered.connect(self.show_startup_screen)
+        help_menu.addAction(show_manual_action)
+
+    def show_startup_screen(self):
+        if not QSettings().value("agreement_accepted", False):
+                startup_dialog = StartupScreen(self)
+                startup_dialog.exec()
+        
+        # Анимация плавного появления основного интерфейса
+        self.animation = QPropertyAnimation(self, b"windowOpacity")
+        self.animation.setDuration(1000)
+        self.animation.setStartValue(0.0)
+        self.animation.setEndValue(1.0)
+        self.animation.start()
 
     def setup_ui(self):
         central_widget = QWidget()
