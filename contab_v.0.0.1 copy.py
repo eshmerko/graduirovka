@@ -437,7 +437,7 @@ class StartupScreen(QDialog):
 class FileConverterApp(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.current_version = "0.0.0"  # Замените на вашу версию
+        self.current_version = "0.0.5"  # Замените на вашу версию
         self.update_check_url = "http://127.0.0.1:8000/api/check-update/"
         self.update_info = None
         self.settings = QSettings("YourCompany", "YourApp")
@@ -600,14 +600,13 @@ class FileConverterApp(QMainWindow):
                 'Accept': 'application/json'
             }
             
-            # Исправленный URL запроса
             response = requests.get(
-                f"http://127.0.0.1:8000/api/check-update/contab/{self.current_version}/",
+                f"{self.update_check_url}contab/{self.current_version}/",
                 headers=headers,
                 timeout=10,
                 verify=False
             )
-                
+            
             if response.status_code == 200:
                 data = response.json()
                 if data.get('update_available', False):

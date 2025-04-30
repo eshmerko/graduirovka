@@ -2,8 +2,9 @@
 # SPDX-License-Identifier: MIT
 
 class AppConfig:
+    PROGRAM_SLUG = "contab"
     # Версия приложения
-    VERSION = "0.0.1"
+    VERSION = "0.0.0"
     
     # Лицензия
     LICENSE_INFO = {
@@ -19,8 +20,9 @@ copies of the Software..."""
     }
 
     # Настройки обновлений
-    UPDATE_CHECK_URL = "https://eshmerko.com/versions.json"
-    BASE_DOWNLOAD_URL = "https://eshmerko.com/"
+    UPDATE_CHECK_URL = "http://127.0.0.1:8000/api/check-update/"
+    BASE_DOWNLOAD_URL = "http://127.0.0.1:8000/downloads/"
+
     
     # Информация о разработчике
     COMPANY_NAME = "ОАО «Пуховичинефтепродукт»"
