@@ -391,16 +391,6 @@ class StartupScreen(QDialog):
             QScrollArea {
                 border: none;
             }
-            QScrollBar:vertical {
-                width: 12px;
-                background: #f0f0f0;
-                border-radius: 6px;
-            }
-            QScrollBar::handle:vertical {
-                background: #c0c0c0;
-                min-height: 30px;
-                border-radius: 6px;
-            }
         """)
     
     def get_content_text(self):
@@ -432,15 +422,36 @@ class StartupScreen(QDialog):
         </ul>
         <p>Используя данное программное обеспечение, вы соглашаетесь с этими условиями.</p>
         """
-
 # Основной класс приложения
 class FileConverterApp(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.current_version = "0.0.0"  # Замените на вашу версию
+        self.current_version = "0.0.2"  # Замените на вашу версию
         self.update_check_url = "http://127.0.0.1:8000/api/check-update/"
         self.update_info = None
         self.settings = QSettings("YourCompany", "YourApp")
+        # Проверка соглашения при запуске
+        self.check_agreement()
+
+    def check_agreement(self):
+        """Проверка принятия пользовательского соглашения"""
+        settings = QSettings()
+        if not settings.value("agreement_accepted", False, type=bool):
+            self.show_agreement_dialog()
+            
+    def show_agreement_dialog(self):
+        """Показ диалога с соглашением"""
+        dialog = StartupScreen(self)
+        if dialog.exec() == QDialog.Accepted:
+            QSettings().setValue("agreement_accepted", True)
+        else:
+            # Если пользователь не принял соглашение
+            QMessageBox.warning(
+                self,
+                "Требуется согласие",
+                "Для использования программы необходимо принять условия соглашения",
+            )
+            QTimer.singleShot(0, self.close)
 
         # Настройка главного окна
         self.setWindowTitle("File Converter Pro")
