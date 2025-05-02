@@ -427,7 +427,7 @@ class FileConverterApp(QMainWindow):
     def __init__(self):
         super().__init__()
         self.current_version = "0.0.2"  # Замените на вашу версию
-        self.update_check_url = "http://127.0.0.1:8000/api/check-update/"
+        self.update_check_url = "https://eshmerko.com/api/check-update/"
         self.update_info = None
         self.settings = QSettings("YourCompany", "YourApp")
         # Проверка соглашения при запуске
@@ -708,6 +708,14 @@ class FileConverterApp(QMainWindow):
         if len(numbers) in (2, 3):
             return f"{numbers[0]}~{numbers[1]}"
         return None
+    
+    def sanitize_filename(self, filename):
+        """Очищает имя файла от запрещенных символов и нормализует пробелы."""
+        forbidden_chars = r'[\\/*?:"<>|]'
+        sanitized = re.sub(forbidden_chars, '_', filename)
+        sanitized = sanitized.strip()
+        sanitized = re.sub(r'[\s_]+', '_', sanitized)
+        return sanitized
 
     def process_file(self):
         input_path = self.input_entry.text().strip()
@@ -716,6 +724,47 @@ class FileConverterApp(QMainWindow):
         if not input_path:
             QMessageBox.critical(self, "Ошибка", "Пожалуйста, выберите исходный файл!")
             return
+        
+        # Проверка расширения исходного файла
+        valid_extensions = ('.docx', '.doc', '.rtf')
+        if not input_path.lower().endswith(valid_extensions):
+            QMessageBox.critical(
+                self,
+                "Ошибка",
+                "Неподдерживаемый формат файла. Выберите файл с расширением .docx, .doc или .rtf."
+            )
+            return
+
+        # Обработка имени выходного файла
+        if not output_path:
+            output_path = "результат.txt"
+        else:
+            dirname = os.path.dirname(output_path)
+            filename = os.path.basename(output_path)
+            filename_part, ext = os.path.splitext(filename)
+            sanitized_filename = self.sanitize_filename(filename_part)
+            if not ext:
+                ext = '.txt'
+            ext = ext.lower()
+            output_path = os.path.join(dirname, f"{sanitized_filename}{ext}")
+
+        # Проверка и создание директории для выходного файла
+        output_dir = os.path.dirname(output_path)
+        if output_dir and not os.path.exists(output_dir):
+            try:
+                os.makedirs(output_dir)
+            except OSError as e:
+                self.log_message(f"Ошибка создания директории: {str(e)}", status=True)
+                QMessageBox.critical(
+                    self,
+                    "Ошибка",
+                    f"Невозможно создать директорию: {output_dir}"
+                )
+                return
+
+        self.output_entry.setText(output_path)
+        self.log_area.clear()
+        self.log_message("=== Начало обработки ===", status=True)
 
         if not output_path:
             output_path = "результат.txt"
@@ -770,61 +819,86 @@ class FileConverterApp(QMainWindow):
             word = None
             doc = None
             temp_path = None
+            file_created = False  # Флаг успешного создания файла
 
             try:
-                word = win32.Dispatch("Word.Application")
-                word.Visible = False
-                word.DisplayAlerts = False
+                # Инициализация Word
+                try:
+                    word = win32.Dispatch("Word.Application")
+                    word.Visible = False
+                    word.DisplayAlerts = False
+                except Exception as e:
+                    self.log_message("[ОШИБКА] Не удалось инициализировать Microsoft Word", status=True)
+                    raise RuntimeError("Ошибка инициализации Word") from e
 
-                for attempt in range(3):
+                # Попытки открытия документа
+                for attempt in range(1, 4):
                     try:
                         doc = word.Documents.Open(
-                            FileName=input_path,
+                            FileName=os.path.abspath(input_path),
                             ConfirmConversions=False,
                             ReadOnly=True,
                             AddToRecentFiles=False,
                             PasswordDocument=""
                         )
-                        break
+                        if doc:
+                            break
                     except Exception as e:
-                        if attempt == 2:
-                            raise RuntimeError(f"Не удалось открыть файл после 3 попыток: {str(e)}")
-                        time.sleep(1)
+                        if attempt == 3:
+                            error_msg = f"Не удалось открыть документ после 3 попыток: {str(e)}"
+                            if "The document is locked" in str(e):
+                                error_msg += "\nФайл заблокирован для редактирования!"
+                            raise RuntimeError(error_msg) from e
+                        time.sleep(1.5)
 
-                if doc is None:
-                    raise RuntimeError("Не удалось открыть документ в Word")
+                # Проверка успешности открытия
+                if not doc:
+                    raise RuntimeError("Документ не был открыт")
 
+                # Создание временного файла
                 temp_dir = tempfile.gettempdir()
-                temp_path = os.path.join(temp_dir, f"temp_{os.path.basename(input_path)}.rtf")
-                
-                doc.SaveAs(temp_path, FileFormat=6)
-                self.log_message(f"Успешно конвертировано в: {temp_path}")
+                sanitized_name = self.sanitize_filename(os.path.basename(input_path))
+                temp_path = os.path.join(temp_dir, f"temp_{sanitized_name}.rtf")
+
+                # Сохранение документа
+                try:
+                    doc.SaveAs(temp_path, FileFormat=6)
+                    file_created = True
+                    self.log_message(f"Успешно создан временный файл: {temp_path}")
+                except Exception as e:
+                    raise RuntimeError(f"Ошибка сохранения RTF: {str(e)}") from e
 
                 return temp_path
 
             except Exception as e:
-                error_msg = f"[ОШИБКА] Конвертация в RTF: {str(e)}"
-                if "The document is locked" in str(e):
-                    error_msg += "\nФайл заблокирован для редактирования!"
-                elif "password" in str(e).lower():
-                    error_msg += "\nФайл защищен паролем!"
+                error_msg = f"[ОШИБКА] Конвертация: {str(e)}"
                 self.log_message(error_msg, status=True)
                 return None
 
             finally:
                 try:
+                    # Закрытие документа и Word
                     if doc:
                         doc.Close(SaveChanges=False)
                     if word:
                         word.Quit()
+                    
+                    # Удаление временного файла только при ошибке
+                    if temp_path and os.path.exists(temp_path) and not file_created:
+                        try:
+                            os.remove(temp_path)
+                        except Exception as remove_error:
+                            self.log_message(f"[WARNING] Ошибка удаления файла: {str(remove_error)}")
+                    
                     pythoncom.CoUninitialize()
-                    if temp_path and not os.path.exists(temp_path):
-                        os.remove(temp_path)
+                    
                 except Exception as cleanup_error:
                     self.log_message(f"[ОШИБКА] Очистка ресурсов: {str(cleanup_error)}")
+                    if "RPC_E_CALL_REJECTED" in str(cleanup_error):
+                        self.log_message("[WARNING] Попробуйте перезапустить приложение", status=True)
 
         except Exception as outer_error:
-            self.log_message(f"[ОШИБКА] Внешняя ошибка конвертации: {str(outer_error)}", status=True)
+            self.log_message(f"[ОШИБКА] Внешняя ошибка: {str(outer_error)}", status=True)
             return None
 
     def process_rtf(self, rtf_path):
