@@ -4,7 +4,7 @@
 class AppConfig:
     PROGRAM_SLUG = "contab"
     # Версия приложения
-    VERSION = "0.0.1"
+    VERSION = "0.0.3"
     
     # Лицензия
     LICENSE_INFO = {
